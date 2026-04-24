@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Claire's Birthday Message Vault</title>
+  <link rel="stylesheet" href="styles.css" />
+  <!-- Google Fonts preconnect -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- Supabase JS SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+  <!-- Top navigation -->
+  <nav class="top-nav">
+    <div class="nav-brand">
+      <span class="script">Claire</span>
+    </div>
+    <div class="nav-actions">
+      <a href="login.html" class="btn btn--ghost" style="padding: 9px 20px; font-size: 0.82rem;">
+        Claire's Login ↗
+      </a>
+    </div>
+  </nav>
+
+  <!-- Main content -->
+  <main class="page-wrapper" style="padding-top: 100px;">
+    <div class="container">
+
+      <!-- Header -->
+      <header class="site-header">
+        <span class="eyebrow">✦ Birthday Message Vault ✦</span>
+        <h1>Write a Birthday<br/>Message for Claire</h1>
+        <div class="petal-row">
+          <span>🌸</span><span>🌷</span><span>✿</span><span>🌷</span><span>🌸</span>
+        </div>
+        <p class="subtitle">
+          Share your love, kind words, and memories to make<br/>
+          Claire's birthday truly special.
+        </p>
+      </header>
+
+      <!-- Form card -->
+      <div class="card">
+
+        <form id="messageForm" novalidate>
+
+          <div class="form-group">
+            <label for="name">Your Name</label>
+            <input
+              type="text"
+              id="name"
+              name="name"
+              placeholder="e.g. Sarah, Uncle James..."
+              autocomplete="name"
+              maxlength="80"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="message">Your Birthday Message</label>
+            <textarea
+              id="message"
+              name="message"
+              placeholder="Write something heartfelt for Claire… share a memory, a wish, or simply let her know she's loved."
+              maxlength="1200"
+            ></textarea>
+          </div>
+
+          <!-- Alerts -->
+          <div class="alert alert--error" id="errorAlert" role="alert">
+            <span>⚠️</span>
+            <span id="errorText">Please fill in all fields before submitting.</span>
+          </div>
+
+          <div class="alert alert--success" id="successAlert" role="alert">
+            <span>🎀</span>
+            <span>Your message has been added to Claire's birthday vault.</span>
+          </div>
+
+          <div class="divider" style="margin: 28px 0;"></div>
+
+          <button type="submit" class="btn btn--primary btn--full" id="submitBtn">
+            <span id="submitText">Send Your Wishes</span>
+          </button>
+
+        </form>
+
+      </div>
+
+      <!-- Footer note -->
+      <p style="text-align:center; margin-top: 28px; font-size:0.8rem; color: var(--text-light);">
+        Messages are stored privately and only visible to Claire 🔒
+      </p>
+
+    </div>
+  </main>
+
+  <script>
+    // ============================================================
+    // Supabase Configuration
+    // ============================================================
+    const SUPABASE_URL = 'https://xtzhgmsyfntdtpukqako.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh0emhnbXN5Zm50ZHRwdWtxYWtvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3Njk3NjM0MSwiZXhwIjoyMDkyNTUyMzQxfQ.LjxH5r1yUk9T9UD4ZWBPbc0n-kSu-UT3HIGYFN6JNHE';
+    const EVENT_ID = 'claire';
+
+    const { createClient } = supabase;
+    const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // ============================================================
+    // DOM References
+    // ============================================================
+    const form       = document.getElementById('messageForm');
+    const nameInput  = document.getElementById('name');
+    const msgInput   = document.getElementById('message');
+    const submitBtn  = document.getElementById('submitBtn');
+    const submitText = document.getElementById('submitText');
+    const errorAlert = document.getElementById('errorAlert');
+    const errorText  = document.getElementById('errorText');
+    const successAlert = document.getElementById('successAlert');
+
+    // ============================================================
+    // Helper: show / hide alerts
+    // ============================================================
+    function showError(msg) {
+      errorText.textContent = msg;
+      errorAlert.classList.add('show');
+      successAlert.classList.remove('show');
+    }
+
+    function showSuccess() {
+      successAlert.classList.add('show');
+      errorAlert.classList.remove('show');
+    }
+
+    function clearAlerts() {
+      errorAlert.classList.remove('show');
+      successAlert.classList.remove('show');
+    }
+
+    // ============================================================
+    // Form submission
+    // ============================================================
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      clearAlerts();
+
+      const name    = nameInput.value.trim();
+      const message = msgInput.value.trim();
+
+      // Validation
+      if (!name || !message) {
+        showError('Please fill in both your name and a message before sending.');
+        return;
+      }
+
+      if (message.length < 5) {
+        showError('Your message is a little short — share a bit more! 💛');
+        return;
+      }
+
+      // Loading state
+      submitBtn.disabled = true;
+      submitText.textContent = 'Sending…';
+
+      try {
+        // Insert into Supabase
+        const { error } = await db
+          .from('messages')
+          .insert([{ event_id: EVENT_ID, name, message }]);
+
+        if (error) throw error;
+
+        // Success
+        showSuccess();
+        form.reset();
+
+        // Scroll to success message
+        successAlert.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+      } catch (err) {
+        console.error('Supabase error:', err);
+        showError('Something went wrong while saving your message. Please try again.');
+      } finally {
+        // Restore button
+        submitBtn.disabled = false;
+        submitText.textContent = 'Send Your Wishes';
+      }
+    });
+
+    // Dismiss alerts when user starts typing again
+    [nameInput, msgInput].forEach(el => {
+      el.addEventListener('input', clearAlerts);
+    });
+  </script>
+
+</body>
+</html>

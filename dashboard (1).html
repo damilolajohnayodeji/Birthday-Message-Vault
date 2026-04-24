@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Claire's Dashboard — Birthday Vault</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- Supabase JS SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- html2canvas for card image generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+
+  <!-- Top Navigation -->
+  <nav class="top-nav">
+    <div class="nav-brand">
+      <span class="script">Claire</span>
+    </div>
+    <div class="nav-actions">
+      <span id="messageCountNav" class="message-count" style="display:none;"></span>
+      <button class="btn btn--ghost" id="logoutBtn" style="padding: 9px 20px; font-size: 0.82rem;">
+        Log out
+      </button>
+    </div>
+  </nav>
+
+  <!-- Hidden birthday card template (used for html2canvas rendering) -->
+  <div id="card-canvas-container">
+    <div class="birthday-card-template" id="birthdayCardTemplate">
+      <div class="bcard-border"></div>
+
+      <!-- Sender label -->
+      <div class="bcard-sender" id="cardSender">From: —</div>
+
+      <div class="bcard-divider"></div>
+
+      <!-- Message body -->
+      <div class="bcard-message" id="cardMessage">
+        &ldquo;Your message will appear here.&rdquo;
+      </div>
+
+      <div class="bcard-divider"></div>
+
+      <!-- Footer: Happy Birthday Claire -->
+      <div class="bcard-footer">
+        <span class="bcard-hb">Happy Birthday Claire</span>
+        <div class="bcard-flourish">✦ ✿ ✦</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Page -->
+  <main style="padding-top: 80px; padding-bottom: 60px; position: relative; z-index: 1;">
+    <div class="container container--wide" style="padding: 40px 24px;">
+
+      <!-- Dashboard Header -->
+      <div class="dash-header">
+        <div class="dash-header-left">
+          <h1>Welcome, Claire <span style="font-style:italic; color: var(--dusty-rose);">🎀</span></h1>
+          <p>Here are the beautiful messages people shared with you.</p>
+        </div>
+        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+          <span id="messageCountBadge" class="message-count" style="display:none;"></span>
+          <button class="btn btn--ghost" id="refreshBtn" style="padding: 10px 20px; font-size: 0.85rem;">
+            ↺ Refresh
+          </button>
+        </div>
+      </div>
+
+      <!-- Error Alert -->
+      <div class="alert alert--error" id="fetchError" role="alert" style="margin-bottom: 24px;">
+        <span>⚠️</span>
+        <span id="fetchErrorText">Unable to load messages. Please try refreshing.</span>
+      </div>
+
+      <!-- Messages Container -->
+      <div id="messagesContainer">
+
+        <!-- Loading state -->
+        <div class="loading-state" id="loadingState">
+          <div class="loading-spinner"></div>
+          <p style="font-size: 0.9rem;">Loading your messages…</p>
+        </div>
+
+        <!-- Empty state (hidden by default) -->
+        <div class="empty-state" id="emptyState" style="display: none;">
+          <span class="script">No messages yet</span>
+          <p style="margin-top: 8px; font-size: 0.9rem;">
+            Share the <a href="index.html" style="color: var(--dusty-rose);">public link</a> so people can write to you! 🌸
+          </p>
+        </div>
+
+        <!-- Messages grid -->
+        <div class="messages-grid" id="messagesGrid"></div>
+
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    // ============================================================
+    // Auth guard — redirect if not logged in
+    // ============================================================
+    const SESSION_KEY = 'claire_vault_auth';
+    if (sessionStorage.getItem(SESSION_KEY) !== 'true') {
+      window.location.href = 'login.html';
+    }
+
+    // ============================================================
+    // Supabase Configuration
+    // ============================================================
+    const SUPABASE_URL      = 'https://xtzhgmsyfntdtpukqako.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh0emhnbXN5Zm50ZHRwdWtxYWtvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3Njk3NjM0MSwiZXhwIjoyMDkyNTUyMzQxfQ.LjxH5r1yUk9T9UD4ZWBPbc0n-kSu-UT3HIGYFN6JNHE';
+    const EVENT_ID          = 'claire';
+
+    const { createClient } = supabase;
+    const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // ============================================================
+    // DOM References
+    // ============================================================
+    const messagesGrid    = document.getElementById('messagesGrid');
+    const loadingState    = document.getElementById('loadingState');
+    const emptyState      = document.getElementById('emptyState');
+    const fetchError      = document.getElementById('fetchError');
+    const fetchErrorText  = document.getElementById('fetchErrorText');
+    const messageCountBadge = document.getElementById('messageCountBadge');
+    const messageCountNav   = document.getElementById('messageCountNav');
+    const refreshBtn      = document.getElementById('refreshBtn');
+    const logoutBtn       = document.getElementById('logoutBtn');
+
+    // Card template elements
+    const cardTemplate    = document.getElementById('birthdayCardTemplate');
+    const cardSenderEl    = document.getElementById('cardSender');
+    const cardMessageEl   = document.getElementById('cardMessage');
+
+    // ============================================================
+    // Utility: Format date nicely
+    // ============================================================
+    function formatDate(isoString) {
+      const date = new Date(isoString);
+      return date.toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      });
+    }
+
+    // ============================================================
+    // Utility: Truncate long messages for card preview display
+    // ============================================================
+    function truncate(str, max = 300) {
+      if (str.length <= max) return str;
+      return str.substring(0, max).trimEnd() + '…';
+    }
+
+    // ============================================================
+    // Fetch messages from Supabase
+    // ============================================================
+    async function fetchMessages() {
+      // Reset UI
+      loadingState.style.display = 'block';
+      emptyState.style.display   = 'none';
+      messagesGrid.innerHTML     = '';
+      fetchError.classList.remove('show');
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = '↺ Loading…';
+
+      try {
+        const { data, error } = await db
+          .from('messages')
+          .select('*')
+          .eq('event_id', EVENT_ID)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        loadingState.style.display = 'none';
+
+        if (!data || data.length === 0) {
+          emptyState.style.display = 'block';
+          updateCount(0);
+        } else {
+          renderMessages(data);
+          updateCount(data.length);
+        }
+
+      } catch (err) {
+        console.error('Fetch error:', err);
+        loadingState.style.display = 'none';
+        fetchErrorText.textContent = 'Unable to load messages. Please try refreshing.';
+        fetchError.classList.add('show');
+      } finally {
+        refreshBtn.disabled = false;
+        refreshBtn.textContent = '↺ Refresh';
+      }
+    }
+
+    // ============================================================
+    // Update message count badges
+    // ============================================================
+    function updateCount(count) {
+      const label = count === 1 ? '1 message' : `${count} messages`;
+      messageCountBadge.textContent = label;
+      messageCountNav.textContent   = label;
+      messageCountBadge.style.display = 'inline-block';
+      messageCountNav.style.display   = 'inline-block';
+    }
+
+    // ============================================================
+    // Render message cards
+    // ============================================================
+    function renderMessages(messages) {
+      messagesGrid.innerHTML = '';
+
+      messages.forEach((msg, index) => {
+        const card = document.createElement('div');
+        card.className = 'message-card';
+        card.style.animationDelay = `${index * 0.07}s`;
+
+        card.innerHTML = `
+          <div class="message-card__sender">
+            From: ${escapeHtml(msg.name)}
+          </div>
+
+          <div class="message-card__text">
+            ${escapeHtml(msg.message)}
+          </div>
+
+          <div class="message-card__footer">
+            <span class="message-card__date">
+              🗓 ${formatDate(msg.created_at)}
+            </span>
+            <button
+              class="btn btn--download"
+              data-id="${msg.id}"
+              data-name="${encodeURIComponent(msg.name)}"
+              data-message="${encodeURIComponent(msg.message)}"
+              aria-label="Download message from ${escapeHtml(msg.name)} as birthday card"
+            >
+              🖼 Download as Card
+            </button>
+          </div>
+        `;
+
+        messagesGrid.appendChild(card);
+      });
+
+      // Attach download listeners
+      messagesGrid.querySelectorAll('.btn--download').forEach(btn => {
+        btn.addEventListener('click', handleDownload);
+      });
+    }
+
+    // ============================================================
+    // Escape HTML to prevent XSS
+    // ============================================================
+    function escapeHtml(str) {
+      const el = document.createElement('div');
+      el.textContent = str;
+      return el.innerHTML;
+    }
+
+    // ============================================================
+    // Download card as PNG using html2canvas
+    // ============================================================
+    async function handleDownload(e) {
+      const btn = e.currentTarget;
+      const name    = decodeURIComponent(btn.dataset.name);
+      const message = decodeURIComponent(btn.dataset.message);
+
+      // Disable button during processing
+      btn.disabled = true;
+      btn.textContent = '⏳ Generating…';
+
+      try {
+        // Populate the hidden card template
+        cardSenderEl.textContent  = `From: ${name}`;
+        cardMessageEl.innerHTML   = `\u201C${truncate(message, 400)}\u201D`;
+
+        // Wait a tick for DOM to settle
+        await new Promise(r => setTimeout(r, 80));
+
+        // Use html2canvas to render the card
+        const canvas = await html2canvas(cardTemplate, {
+          scale: 2,                      // High DPI for crisp output
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: null,
+          logging: false,
+          windowWidth: cardTemplate.scrollWidth,
+          windowHeight: cardTemplate.scrollHeight,
+        });
+
+        // Convert to PNG and trigger download
+        const link = document.createElement('a');
+        link.download = `birthday-card-from-${name.replace(/\s+/g, '-').toLowerCase()}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+
+      } catch (err) {
+        console.error('Card generation error:', err);
+        alert('Unable to generate card image. Please try again.');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '🖼 Download as Card';
+      }
+    }
+
+    // ============================================================
+    // Logout
+    // ============================================================
+    logoutBtn.addEventListener('click', () => {
+      sessionStorage.removeItem(SESSION_KEY);
+      window.location.href = 'login.html';
+    });
+
+    // ============================================================
+    // Refresh button
+    // ============================================================
+    refreshBtn.addEventListener('click', fetchMessages);
+
+    // ============================================================
+    // Initial load
+    // ============================================================
+    fetchMessages();
+  </script>
+
+</body>
+</html>

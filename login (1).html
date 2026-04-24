@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Claire's Login — Birthday Vault</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+</head>
+<body>
+
+  <main class="page-wrapper">
+    <div class="container" style="max-width: 420px;">
+
+      <!-- Brand -->
+      <div class="brand" style="animation: fadeUp 0.6s ease both;">
+        <span class="script">Claire</span>
+        <p class="tagline">Birthday Message Vault</p>
+      </div>
+
+      <!-- Login card -->
+      <div class="card">
+
+        <div style="text-align:center; margin-bottom: 28px;">
+          <h2 style="font-size: 1.8rem; color: var(--warm-brown);">Welcome Back</h2>
+          <p style="font-size: 0.88rem; color: var(--text-light); margin-top: 6px;">
+            This is your private space, Claire 🎀
+          </p>
+        </div>
+
+        <div class="divider"></div>
+
+        <form id="loginForm" style="margin-top: 24px;" novalidate>
+
+          <div class="form-group">
+            <label for="username">Username</label>
+            <input
+              type="text"
+              id="username"
+              name="username"
+              placeholder="Your username"
+              autocomplete="username"
+              spellcheck="false"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              placeholder="Your password"
+              autocomplete="current-password"
+            />
+          </div>
+
+          <!-- Error alert -->
+          <div class="alert alert--error" id="loginError" role="alert">
+            <span>⚠️</span>
+            <span>Incorrect username or password. Please try again.</span>
+          </div>
+
+          <div style="margin-top: 28px;">
+            <button type="submit" class="btn btn--primary btn--full" id="loginBtn">
+              <span id="loginText">Enter the Vault</span>
+            </button>
+          </div>
+
+        </form>
+
+      </div>
+
+      <!-- Back link -->
+      <p style="text-align:center; margin-top: 24px; font-size: 0.82rem; color: var(--text-light);">
+        <a href="index.html" style="color: var(--dusty-rose); text-decoration: none;">
+          ← Back to public page
+        </a>
+      </p>
+
+    </div>
+  </main>
+
+  <script>
+    // ============================================================
+    // Hardcoded credentials
+    // ============================================================
+    const VALID_USERNAME = 'Claire725';
+    const VALID_PASSWORD = '12345678';
+    const SESSION_KEY    = 'claire_vault_auth';
+
+    // ============================================================
+    // If already logged in, redirect to dashboard
+    // ============================================================
+    if (sessionStorage.getItem(SESSION_KEY) === 'true') {
+      window.location.href = 'dashboard.html';
+    }
+
+    // ============================================================
+    // DOM references
+    // ============================================================
+    const loginForm  = document.getElementById('loginForm');
+    const loginBtn   = document.getElementById('loginBtn');
+    const loginText  = document.getElementById('loginText');
+    const loginError = document.getElementById('loginError');
+    const usernameEl = document.getElementById('username');
+    const passwordEl = document.getElementById('password');
+
+    // ============================================================
+    // Form submit
+    // ============================================================
+    loginForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      loginError.classList.remove('show');
+
+      const username = usernameEl.value.trim();
+      const password = passwordEl.value;
+
+      // Brief loading state
+      loginBtn.disabled = true;
+      loginText.textContent = 'Checking…';
+
+      // Simulate a small delay for UX
+      setTimeout(() => {
+        if (username === VALID_USERNAME && password === VALID_PASSWORD) {
+          // Mark session as authenticated (no localStorage)
+          sessionStorage.setItem(SESSION_KEY, 'true');
+          window.location.href = 'dashboard.html';
+        } else {
+          loginError.classList.add('show');
+          loginBtn.disabled = false;
+          loginText.textContent = 'Enter the Vault';
+          passwordEl.value = '';
+          passwordEl.focus();
+        }
+      }, 400);
+    });
+
+    // Clear error on input
+    [usernameEl, passwordEl].forEach(el => {
+      el.addEventListener('input', () => loginError.classList.remove('show'));
+    });
+  </script>
+
+</body>
+</html>
